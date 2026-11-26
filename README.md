@@ -17,7 +17,9 @@ results/                benchmark.csv, benchmark.png
 
 ## Run
 ```bash
-pip install -r requirements.txt
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 python main.py                       # Airport -> Old Town on the sample city
 python main.py "Market" "Stadium"    # any two locations
 python main.py --benchmark           # compare algorithms on 50..1600 locations

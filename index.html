@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart City Route Optimizer</title>
+<style>
+  :root{--bg:#0b1220;--panel:#131c2e;--panel2:#0f1727;--line:#25324a;--text:#e2e8f0;--muted:#8a9bb5;--accent:#38bdf8;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--bf:#c084fc}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.45}
+  .wrap{max-width:1280px;margin:auto;padding:16px}
+  .top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  h1{margin:0;font-size:1.45rem} .sub{color:var(--muted);font-size:.85rem}
+  .pill{font-size:.78rem;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+  .pill.good{color:var(--ok);border-color:var(--ok)} .pill.err{color:var(--bad);border-color:var(--bad)}
+  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:14px}
+  @media(max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .kpi .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .kpi .v{font-size:1.5rem;font-weight:700;margin-top:2px} .kpi .u{font-size:.8rem;color:var(--muted);font-weight:400}
+  .cols{display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px}
+  .cols2{display:grid;grid-template-columns:1.6fr 1fr;gap:14px}
+  @media(max-width:900px){.cols,.cols2{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+  h2{margin:0 0 10px;font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:10px}
+  label{display:flex;flex-direction:column;font-size:.72rem;color:var(--muted);gap:3px;flex:1;min-width:110px}
+  select,input,button{font:inherit;font-size:.9rem;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text)}
+  button{cursor:pointer;background:var(--accent);color:#04202e;border:none;font-weight:600}
+  button.sec{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  button:hover{filter:brightness(1.12)} button:disabled{opacity:.5;cursor:wait}
+  #map{width:100%;height:auto;background:var(--panel2);border-radius:10px;display:block}
+  .legend span{display:inline-block;margin:8px 14px 0 0;font-size:.78rem;color:var(--muted)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+  .card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel2);margin-bottom:10px}
+  .card h3{margin:0 0 4px;font-size:.85rem} .dj h3{color:var(--accent)} .bf h3{color:var(--bf)}
+  .path{font-weight:600;font-size:.92rem;word-break:break-word}
+  .stat{color:var(--muted);font-size:.78rem;margin-top:3px}
+  #msg{min-height:1.3em;font-size:.85rem;margin:2px 0 8px}
+  .err{color:var(--bad)} .good{color:var(--ok)}
+  table{width:100%;border-collapse:collapse;font-size:.82rem}
+  th,td{padding:6px 6px;text-align:right;border-bottom:1px solid var(--line)} th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600}
+  canvas{width:100%;display:block;background:var(--panel2);border-radius:10px}
+  .note{font-size:.75rem;color:var(--muted);margin:8px 0 0}
+  footer{color:var(--muted);font-size:.75rem;text-align:center;padding:18px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top">
+  <div>
+    <h1>Smart City Route Optimizer</h1>
+    <div class="sub">DAA Capstone · Project 1 · Dijkstra vs Bellman-Ford · locations are vertices, roads are weighted edges</div>
+  </div>
+  <span class="pill" id="status">Ready</span>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="l">Locations</div><div class="v" id="kLoc">-</div></div>
+  <div class="kpi"><div class="l">Roads</div><div class="v" id="kRoads">-</div></div>
+  <div class="kpi"><div class="l">Shortest distance</div><div class="v"><span id="kDist">-</span> <span class="u">km</span></div></div>
+  <div class="kpi"><div class="l">Dijkstra</div><div class="v" style="color:var(--accent)"><span id="kDj">-</span> <span class="u">ms</span></div></div>
+  <div class="kpi"><div class="l">Bellman-Ford</div><div class="v" style="color:var(--bf)"><span id="kBf">-</span> <span class="u">ms</span></div></div>
+  <div class="kpi"><div class="l">Edge checks (DJ / BF)</div><div class="v" id="kChecks">-</div></div>
+</div>
+
+<div class="cols">
+  <section class="panel">
+    <h2>City map</h2>
+    <svg id="map" viewBox="0 0 800 420"></svg>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--ok)"></i>Shortest path</span>
+      <span><i class="dot" style="background:var(--line)"></i>Road</span>
+      <span><i class="dot" style="background:var(--accent)"></i>Source</span>
+      <span><i class="dot" style="background:var(--warn)"></i>Destination</span>
+      <span><i class="dot" style="background:var(--bad)"></i>Negative one-way road</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Route finder</h2>
+    <div class="row">
+      <label>From <select id="src"></select></label>
+      <label>To <select id="dst"></select></label>
+    </div>
+    <div class="row">
+      <button id="go" style="flex:1">Find shortest route</button>
+      <button class="sec" id="reset">Reset city</button>
+    </div>
+    <div id="msg"></div>
+    <div class="card dj"><h3>Dijkstra</h3><div class="path" id="djPath">-</div><div class="stat" id="djStat"></div></div>
+    <div class="card bf"><h3>Bellman-Ford</h3><div class="path" id="bfPath">-</div><div class="stat" id="bfStat"></div></div>
+
+    <h2 style="margin-top:14px">Edit city</h2>
+    <div class="row">
+      <label>Road from <select id="eu"></select></label>
+      <label>to <select id="ev"></select></label>
+      <label style="min-width:70px;flex:.6">km <input id="ew" type="number" value="5"></label>
+    </div>
+    <div class="row" style="margin-bottom:0">
+      <button id="addRoad" style="flex:1">Add road</button>
+      <button class="sec" id="addNeg" style="flex:1">Negative road demo</button>
+    </div>
+    <p class="note">Negative weights are added one-way. Dijkstra rejects them, Bellman-Ford handles them and reports negative cycles.</p>
+  </section>
+</div>
+
+<div class="cols2">
+  <section class="panel">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 style="margin:0">Benchmark: runtime vs number of locations</h2>
+      <button class="sec" id="bench">Run again</button>
+    </div>
+    <canvas id="chart" width="1000" height="340"></canvas>
+  </section>
+
+  <section class="panel">
+    <h2>Benchmark results</h2>
+    <table>
+      <thead><tr><th>V</th><th>E</th><th>DJ ms</th><th>BF ms</th><th>x</th><th>Match</th></tr></thead>
+      <tbody id="benchBody"></tbody>
+    </table>
+    <h2 style="margin-top:16px">Complexity</h2>
+    <table>
+      <thead><tr><th>Algorithm</th><th>Time</th><th>Neg. weights</th></tr></thead>
+      <tbody>
+        <tr><td>Dijkstra</td><td>O((V+E) log V)</td><td>No</td></tr>
+        <tr><td>Bellman-Ford</td><td>O(V·E)</td><td>Yes</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Space is O(V) for both. Dijkstra suits road networks. Bellman-Ford is the fallback when weights can be negative.</p>
+  </section>
+</div>
+
+<footer>Runs entirely in your browser. Python implementation: src/dijkstra.py, src/bellman_ford.py</footer>
+</div>
+
+<script>
+"use strict";
+const INF = Infinity;
+
+/* ---------- Graph ---------- */
+class Graph {
+  constructor(){ this.adj = new Map(); }
+  addVertex(v){ if(!this.adj.has(v)) this.adj.set(v, []); }
+  addEdge(u,v,w,directed=false){
+    this.addVertex(u); this.addVertex(v);
+    this.adj.get(u).push([v,w]);
+    if(!directed) this.adj.get(v).push([u,w]);
+  }
+  get vertices(){ return [...this.adj.keys()]; }
+  edges(){ const out=[]; for(const [u,l] of this.adj) for(const [v,w] of l) out.push([u,v,w]); return out; }
+  numEdges(){ let n=0; for(const l of this.adj.values()) n+=l.length; return n; }
+}
+
+/* ---------- Min-heap ---------- */
+class MinHeap{
+  constructor(){ this.a=[]; }
+  get size(){ return this.a.length; }
+  push(item){ const a=this.a; a.push(item); let i=a.length-1;
+    while(i>0){ const p=(i-1)>>1; if(a[p][0]<=a[i][0]) break; [a[p],a[i]]=[a[i],a[p]]; i=p; } }
+  pop(){ const a=this.a, top=a[0], last=a.pop();
+    if(a.length){ a[0]=last; let i=0;
+      for(;;){ let l=2*i+1, r=l+1, m=i;
+        if(l<a.length && a[l][0]<a[m][0]) m=l;
+        if(r<a.length && a[r][0]<a[m][0]) m=r;
+        if(m===i) break; [a[m],a[i]]=[a[i],a[m]]; i=m; } }
+    return top; }
+}
+
+/* ---------- Algorithms ---------- */
+function dijkstra(g, source){
+  const dist=new Map(), prev=new Map();
+  for(const v of g.vertices){ dist.set(v,INF); prev.set(v,null); }
+  dist.set(source,0);
+  const heap=new MinHeap(); heap.push([0,source]);
+  let relax=0;
+  while(heap.size){
+    const [d,u]=heap.pop();
+    if(d>dist.get(u)) continue;
+    for(const [v,w] of g.adj.get(u)){
+      if(w<0) throw new Error("Dijkstra requires non-negative edge weights");
+      relax++;
+      const nd=d+w;
+      if(nd<dist.get(v)){ dist.set(v,nd); prev.set(v,u); heap.push([nd,v]); }
+    }
+  }
+  return {dist,prev,relax};
+}
+
+function bellmanFord(g, source){
+  const dist=new Map(), prev=new Map();
+  for(const v of g.vertices){ dist.set(v,INF); prev.set(v,null); }
+  dist.set(source,0);
+  const edges=g.edges(); let relax=0;
+  for(let i=0;i<g.vertices.length-1;i++){
+    let changed=false;
+    for(const [u,v,w] of edges){
+      relax++;
+      const du=dist.get(u);
+      if(du!==INF && du+w<dist.get(v)){ dist.set(v,du+w); prev.set(v,u); changed=true; }
+    }
+    if(!changed) break;
+  }
+  for(const [u,v,w] of edges){
+    const du=dist.get(u);
+    if(du!==INF && du+w<dist.get(v)) throw new Error("Negative-weight cycle detected");
+  }
+  return {dist,prev,relax};
+}
+
+function buildPath(prev, src, dst){
+  const p=[]; let c=dst;
+  while(c!==null && c!==undefined){ p.push(c); c=prev.get(c); }
+  p.reverse();
+  return p[0]===src ? p : [];
+}
+
+/* ---------- Sample city ---------- */
+const POS = {
+  "Airport":[70,90], "Central Station":[270,70], "Tech Park":[110,260],
+  "Market":[470,60], "University":[300,230], "Hospital":[500,230],
+  "Stadium":[270,370], "Old Town":[700,200]
+};
+const ROADS = [
+  ["Airport","Central Station",12],["Airport","Tech Park",9],
+  ["Central Station","Market",4],["Central Station","University",7],
+  ["Tech Park","University",5],["Tech Park","Stadium",11],
+  ["Market","Hospital",6],["University","Hospital",3],
+  ["University","Stadium",8],["Hospital","Old Town",5],
+  ["Stadium","Old Town",4],["Market","Old Town",14]
+];
+let city, roadList, highlight = new Set(), srcNode=null, dstNode=null;
+const $=id=>document.getElementById(id);
+
+function resetCity(){
+  roadList = ROADS.map(r=>({u:r[0],v:r[1],w:r[2],directed:false}));
+  rebuild(); highlight=new Set(); srcNode=dstNode=null;
+  for(const id of ["djPath","bfPath"]){ $(id).textContent="-"; $(id).className="path"; }
+  $("djStat").textContent=""; $("bfStat").textContent="";
+  for(const id of ["kDist","kDj","kBf"]) $(id).textContent="-"; $("kChecks").textContent="-";
+  setMsg(""); setStatus("Ready",""); draw();
+}
+function rebuild(){
+  city=new Graph();
+  for(const n of Object.keys(POS)) city.addVertex(n);
+  for(const r of roadList) city.addEdge(r.u,r.v,r.w,r.directed);
+  $("kLoc").textContent=city.vertices.length; $("kRoads").textContent=roadList.length;
+}
+
+/* ---------- UI ---------- */
+function setMsg(t,cls=""){ const m=$("msg"); m.textContent=t; m.className=cls; }
+function setStatus(t,cls){ const s=$("status"); s.textContent=t; s.className="pill "+cls; }
+function fillSelects(){
+  const names=Object.keys(POS);
+  for(const id of ["src","dst","eu","ev"]){
+    const s=$(id); s.innerHTML="";
+    for(const n of names){ const o=document.createElement("option"); o.value=o.textContent=n; s.appendChild(o); }
+  }
+  $("src").value="Airport"; $("dst").value="Old Town"; $("eu").value="Market"; $("ev").value="Stadium";
+}
+
+function draw(){
+  let h="";
+  roadList.forEach(r=>{
+    const [x1,y1]=POS[r.u],[x2,y2]=POS[r.v];
+    const on=highlight.has(r.u+"|"+r.v)||highlight.has(r.v+"|"+r.u);
+    const col=on?"var(--ok)":(r.w<0?"var(--bad)":"var(--line)");
+    h+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="${on?5:2.5}" stroke-linecap="round"${r.directed?' marker-end="url(#arr)"':''}/>`;
+    const mx=(x1+x2)/2,my=(y1+y2)/2;
+    h+=`<text x="${mx}" y="${my-6}" fill="#cbd5e1" font-size="13" text-anchor="middle" paint-order="stroke" stroke="#0f1727" stroke-width="4">${r.w}</text>`;
+  });
+  for(const [n,[x,y]] of Object.entries(POS)){
+    const fill=n===srcNode?"var(--accent)":n===dstNode?"var(--warn)":"#475569";
+    h+=`<circle cx="${x}" cy="${y}" r="13" fill="${fill}" stroke="#0f1727" stroke-width="3"/>`;
+    h+=`<text x="${x}" y="${y+32}" fill="#e2e8f0" font-size="13" text-anchor="middle" paint-order="stroke" stroke="#0f1727" stroke-width="4">${n}</text>`;
+  }
+  $("map").innerHTML=`<defs><marker id="arr" viewBox="0 0 10 10" refX="22" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--bad)"/></marker></defs>`+h;
+}
+
+function showResult(prefix, fn){
+  const s=$("src").value, d=$("dst").value;
+  try{
+    const r=fn(city,s); // first run also surfaces errors
+    const REPS=300, t=performance.now(); for(let i=0;i<REPS;i++) fn(city,s); const ms=(performance.now()-t)/REPS;
+    const path=buildPath(r.prev,s,d);
+    if(!path.length){ $(prefix+"Path").textContent="No route"; $(prefix+"Stat").textContent=""; return null; }
+    $(prefix+"Path").textContent=path.join(" → ");
+    $(prefix+"Stat").textContent=`Cost ${r.dist.get(d)} km · ${r.relax} edge checks · ${ms.toFixed(3)} ms`;
+    return {path,cost:r.dist.get(d),ms,relax:r.relax};
+  }catch(e){
+    $(prefix+"Path").textContent="Error: "+e.message; $(prefix+"Path").className="path err";
+    $(prefix+"Stat").textContent=""; return null;
+  }
+}
+
+function findRoute(){
+  $("djPath").className="path"; $("bfPath").className="path";
+  const s=$("src").value, d=$("dst").value;
+  srcNode=s; dstNode=d; highlight=new Set(); setMsg("");
+  if(s===d){ setMsg("Pick two different locations.","err"); draw(); return; }
+  const a=showResult("dj",dijkstra), b=showResult("bf",bellmanFord);
+  const bestR=b||a;
+  $("kDj").textContent=a?a.ms.toFixed(3):"n/a"; $("kBf").textContent=b?b.ms.toFixed(3):"n/a";
+  $("kChecks").textContent=`${a?a.relax:"-"} / ${b?b.relax:"-"}`;
+  $("kDist").textContent=bestR?bestR.cost:"-";
+  if(bestR){
+    for(let i=0;i<bestR.path.length-1;i++) highlight.add(bestR.path[i]+"|"+bestR.path[i+1]);
+    if(a&&b){ const ok=a.cost===b.cost; setMsg(ok?`Both algorithms agree: ${a.cost} km`:"Algorithms disagree!",ok?"good":"err"); setStatus(ok?"Algorithms agree":"Mismatch",ok?"good":"err"); }
+    else setStatus("Dijkstra rejected input","err");
+  } else setStatus("Error","err");
+  draw();
+}
+
+/* ---------- Benchmark ---------- */
+function mulberry(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return((t^t>>>14)>>>0)/4294967296; }; }
+function randomCity(n,seed){
+  const rnd=mulberry(seed), g=new Graph();
+  const ri=m=>Math.floor(rnd()*m), rw=()=>1+ri(100);
+  const order=[...Array(n).keys()];
+  for(let i=n-1;i>0;i--){ const j=ri(i+1); [order[i],order[j]]=[order[j],order[i]]; }
+  for(let i=1;i<n;i++) g.addEdge(order[i],order[ri(i)],rw());
+  for(let i=0;i<n*2;i++){ const u=ri(n),v=ri(n); if(u!==v) g.addEdge(u,v,rw()); }
+  return g;
+}
+function best(fn,g,src,runs=3){
+  const reps=Math.max(1,Math.round(3000/g.vertices.length)); let b=INF,res;
+  for(let i=0;i<runs;i++){ const t=performance.now(); for(let k=0;k<reps;k++) res=fn(g,src); b=Math.min(b,(performance.now()-t)/reps); }
+  return [b,res];
+}
+function sameDist(a,b){ for(const [k,v] of a) if(b.get(k)!==v) return false; return true; }
+
+const benchRows=[];
+async function runBench(){
+  const btn=$("bench"); btn.disabled=true; benchRows.length=0; $("benchBody").innerHTML="";
+  for(const n of [50,100,200,400,800,1600]){
+    btn.textContent=`Running V=${n}...`;
+    await new Promise(r=>setTimeout(r,20));
+    const g=randomCity(n,n);
+    const [td,rd]=best(dijkstra,g,0), [tb,rb]=best(bellmanFord,g,0);
+    const row={n,e:g.numEdges(),td,tb,same:sameDist(rd.dist,rb.dist)};
+    benchRows.push(row);
+    $("benchBody").insertAdjacentHTML("beforeend",
+      `<tr><td>${row.n}</td><td>${row.e}</td><td>${td.toFixed(3)}</td><td>${tb.toFixed(3)}</td><td>${(tb/td).toFixed(1)}</td><td>${row.same?"Yes":"NO"}</td></tr>`);
+    drawChart();
+  }
+  btn.textContent="Run again"; btn.disabled=false;
+}
+function drawChart(){
+  const c=$("chart"), x=c.getContext("2d"), W=c.width, H=c.height, P={l:60,r:20,t:20,b:40};
+  x.clearRect(0,0,W,H);
+  const maxY=Math.max(...benchRows.map(r=>r.tb))*1.1||1, maxX=1600;
+  const X=v=>P.l+(v/maxX)*(W-P.l-P.r), Y=v=>H-P.b-(v/maxY)*(H-P.t-P.b);
+  x.strokeStyle="#25324a"; x.fillStyle="#8a9bb5"; x.font="14px system-ui"; x.lineWidth=1;
+  for(let i=0;i<=4;i++){ const v=maxY*i/4, y=Y(v); x.beginPath(); x.moveTo(P.l,y); x.lineTo(W-P.r,y); x.stroke(); x.fillText(v.toFixed(1),8,y+4); }
+  for(const n of [50,400,800,1200,1600]){ x.fillText(n,X(n)-12,H-14); }
+  x.fillText("ms",8,14);
+  const line=(key,col)=>{ x.strokeStyle=col; x.fillStyle=col; x.lineWidth=3; x.beginPath();
+    benchRows.forEach((r,i)=>{ const px=X(r.n),py=Y(r[key]); i?x.lineTo(px,py):x.moveTo(px,py); }); x.stroke();
+    benchRows.forEach(r=>{ x.beginPath(); x.arc(X(r.n),Y(r[key]),4,0,7); x.fill(); }); };
+  line("td","#38bdf8"); line("tb","#c084fc");
+  x.fillStyle="#38bdf8"; x.fillText("Dijkstra",W-200,30); x.fillStyle="#c084fc"; x.fillText("Bellman-Ford",W-120,30);
+}
+
+/* ---------- Events ---------- */
+$("go").onclick=findRoute;
+$("reset").onclick=()=>{ resetCity(); findRoute(); };
+$("addRoad").onclick=()=>{
+  const u=$("eu").value,v=$("ev").value,w=Number($("ew").value);
+  if(u===v||!Number.isFinite(w)){ setMsg("Choose two different locations and a valid weight.","err"); return; }
+  roadList.push({u,v,w,directed:w<0}); rebuild(); highlight=new Set(); draw();
+  setMsg(`Added ${u} - ${v} (${w})${w<0?" as one-way":""}. Press Find shortest route.`);
+};
+$("addNeg").onclick=()=>{
+  roadList.push({u:"Market",v:"University",w:-2,directed:true}); rebuild(); draw();
+  setMsg("Added one-way Market → University (-2). Press Find shortest route.");
+};
+$("bench").onclick=runBench;
+
+fillSelects(); resetCity(); findRoute(); runBench();
+</script>
+</body>
+</html>
